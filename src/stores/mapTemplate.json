@@ -1,0 +1,58 @@
+{
+    "resourceType": "QuestionnaireResponse",
+    "id": "10cdadc7-70fb-4044-8ef9-b0d40a9ab6a6",
+    "meta": {
+        "versionId": "1",
+        "lastUpdated": "2022-06-15T16:42:23.827+03:00",
+        "source": "#2ShqefgzkYdgWlEC",
+        "tag": [
+            {
+                "system": "http://fhir.ona.io",
+                "code": "000002",
+                "display": "Malawi Core Patient"
+            }
+        ]
+    },
+    "questionnaire": "Questionnaire/patient-vitals-for-6-months-15-years",
+    "subject": {
+        "reference": "Patient/10198"
+    },
+    "authored": "2022-06-15T15:33:14+02:00",
+    "item": [
+        {
+            "linkId": "weight",
+            "answer": [
+                {
+                    "valueInteger": 20
+                }
+            ]
+        },
+        {
+            "linkId": "height",
+            "answer": [
+                {
+                    "valueInteger": 58
+                }
+            ]
+        },
+        {
+            "linkId": "muac-assessment",
+            "answer": [
+                {
+                    "valueDecimal": 20.0
+                }
+            ]
+        },
+        {
+            "linkId": "no-malnutrition"
+        },
+        {
+            "linkId": "patient-id",
+            "answer": [
+                {
+                    "valueString": "10198"
+                }
+            ]
+        }
+    ]
+}
