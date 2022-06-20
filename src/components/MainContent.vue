@@ -29,7 +29,13 @@
   <q-card class="qCard">
     <q-card-section>{{ resultMapTitle }}</q-card-section>
     <q-card-section>
-      <q-input type="textarea" filled v-model="target.mapText" />
+      <q-input
+        type="textarea"
+        filled
+        v-model="target.mapText"
+        :error="!!target.mappingError"
+        :error-message="target.mappingError"
+      />
     </q-card-section>
   </q-card>
 </template>
@@ -55,7 +61,8 @@ export default {
     ],
     resultMapTitle: "FHIR Mapping Language map (.map)",
     target: {
-      mapText: ""
+      mapText: "",
+      mappingError: ""
     }
   }),
   methods: {
@@ -65,7 +72,8 @@ export default {
   },
   watch: {
     source: {
-      handler: function (newValue, oldValue) {
+      handler: function (newValue) {
+        this.target.mappingError = ""
         if (!newValue.uniqueNameIdentifier || !newValue.questionnaireResponse){
           return;
         }
@@ -74,7 +82,12 @@ export default {
         console.log(newValue);
         const questionnaireResponseNotValid = this.questionnaireResponseRules.some((rule) => typeof rule(newValue.questionnaireResponse) === "string")
         if (questionnaireResponseNotValid) return;
-        this.target.mapText = this.generateMap(newValue.uniqueNameIdentifier, JSON.parse(newValue.questionnaireResponse))
+        try {
+          this.target.mapText = this.generateMap(newValue.uniqueNameIdentifier, JSON.parse(newValue.questionnaireResponse));
+        }catch (e) {
+          this.target.mappingError = e;
+        }
+
       },
       deep: true,
       immediate: true

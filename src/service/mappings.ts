@@ -9,7 +9,7 @@ export const extractedSingle = (linkId: string, val: Record<string, any>) => {
   if ("valueDecimal" in val) {
     return `create("Quantity") as qty then 
                 {
-                    src -> qty.value = evaluate(src, $this.item.where(linkId = ${linkId}).answer.value) "r_${snakeCase(
+                    src -> qty.value = evaluate(src, $this.item.where(linkId = "${linkId}").answer.value) "r_${snakeCase(
       linkId
     )}_value_1";
                     src -> qty.system = copy("http://unitsofmeasure.org") "r_${snakeCase(
@@ -23,7 +23,7 @@ export const extractedSingle = (linkId: string, val: Record<string, any>) => {
   } else if ("valueCoding" in val) {
     return `create("CodeableConcept") as valCodeableConcept then 
     {
-        src -> valCodeableConcept.coding = evaluate(src, $this.item.where(linkId = ${linkId}).answer.value) "r_${snakeCase(
+        src -> valCodeableConcept.coding = evaluate(src, $this.item.where(linkId = "${linkId}").answer.value) "r_${snakeCase(
       linkId
     )}_value_1";
     }`;
@@ -44,42 +44,83 @@ export const extractedSingle = (linkId: string, val: Record<string, any>) => {
   }
 };
 
-export const observationValue = (item: {
+export const createObservationsMultiAnswer = (item: {
   linkId: string;
-  answer: Array<Record<string, any>>;
+  answer: Array<Record<any, any>>;
 }) => {
-  if (item.answer.length == 1) {
-    const [val] = item.answer;
-    return extractedSingle(item.linkId, val);
-  } else {
-    return `create("CodeableConcept") as multipleValCodeableConcept then 
-                {
-                    src.item as item where $this.linkId="${
-                      item.linkId
-                    }" -> multipleValCodeableConcept then 
-                        {
-                            item.answer as codingAnswer where $this.value is Coding -> multipleValCodeableConcept then 
-                                {
-                                    codingAnswer.value as itemValue -> multipleValCodeableConcept.coding = itemValue "r_${snakeCase(
-                                      item.linkId
-                                    )}_value_1_1_1";
-                                } "r_${snakeCase(item.linkId)}_value_1_1";
-                
-                            item.answer as textAnswer where $this.value is string -> multipleValCodeableConcept then 
-                                {
-                                    textAnswer.value as itemValue -> multipleValCodeableConcept.text = itemValue "r_${snakeCase(
-                                      item.linkId
-                                    )}_value_1_2_1";
-                                } "r_${snakeCase(item.linkId)}_value_1_2";
-                        } "r_${snakeCase(item.linkId)}_value_1";
-                }`;
-  }
+  const groupName = `extract${titleCase(item.linkId)}MultipleObservation`;
+
+  const groupMethod = `
+group ${groupName}(source src: QuestionnaireResponse, target encounter: Encounter, target bundle: Bundle)
+    {
+        src.item as item where $this.linkId = "${
+          item.linkId
+        }" -> bundle then 
+            {
+                item.answer as itemAnswer -> bundle.entry as entry, entry.resource = create("Observation") as obs then 
+                    {
+                        src -> obs.id = uuid() "r_${snakeCase(
+                          item.linkId
+                        )}_uuid";
+                        src -> obs.code = create("CodeableConcept") as code then
+                            {
+                                // TODO: Search correct coding
+                                itemAnswer -> code.coding = c("http://d-tree.org", "${
+                                  item.linkId
+                                }") "r_${snakeCase(item.linkId)}_code_1";
+                            } "r_${snakeCase(item.linkId)}_code";
+                        src -> obs.subject = create("Reference") as ref then 
+                            {
+                                src -> ref.reference = evaluate(src, "Patient/" + $this.item.where(linkId = "patient-id").answer.value) "r_${snakeCase(
+                                  item.linkId
+                                )}_subject_1";
+                            } "r_${snakeCase(item.linkId)}_subject";
+                        src -> obs.encounter = reference(encounter) "r_${snakeCase(
+                          item.linkId
+                        )}_encounter";
+                        src -> obs.category = cc("http://terminology.hl7.org/CodeSystem/observation-category", 'vital-signs', "Vital Signs") "r_${snakeCase(
+                          item.linkId
+                        )}_category";
+                        src -> obs.effective = evaluate(src, now()) "r_${snakeCase(
+                          item.linkId
+                        )}_effective";
+                        src -> obs.status = copy("finished") "r_${snakeCase(
+                          item.linkId
+                        )}_status";
+                        itemAnswer.value as answerValue -> obs.value = create("CodeableConcept") as valCodeableConcept then 
+                            {
+                                answerValue where $this is Coding -> valCodeableConcept.coding = answerValue "r_${snakeCase(
+                                  item.linkId
+                                )}_value_1";
+                                answerValue where $this is string -> valCodeableConcept.text = answerValue "r_${snakeCase(
+                                  item.linkId
+                                )}_value_2";
+                            } "r_${item.linkId}_value";
+                    } "r_${snakeCase(item.linkId)}_answers";
+            } "r_${snakeCase(item.linkId)}";
+    }
+    `.trim();
+
+  const groupMethodExecName = `${groupName}(src, encounter, bundle)`;
+
+  return [groupMethod, groupMethodExecName];
 };
 
-export const createObservation = (item: {
+export const createObservationSingleAnswer = (item: {
   linkId: string;
   answer: Array<Record<string, any>>;
 }) => {
+  const observationValue = (item: {
+    linkId: string;
+    answer: Array<Record<string, any>>;
+  }) => {
+    if (item.answer.length !== 1) {
+      throw "Only accepts answer of length 1";
+    }
+    const [val] = item.answer;
+    return extractedSingle(item.linkId, val);
+  };
+
   const groupMethod = `
 group extract${titleCase(
     item.linkId
@@ -108,15 +149,18 @@ group extract${titleCase(
                                       item.linkId
                                     )}_subject_1";
                                 } "r_${snakeCase(item.linkId)}_subject";
-                        src -> obs.encounter = reference(encounter) "r_${
-      snakeCase(item.linkId)
-                        }_encounter";
-                        src -> obs.category = cc("http://terminology.hl7.org/CodeSystem/observation-category", 'vital-signs', "Vital Signs") "r_${
-      snakeCase(item.linkId)
-                        }_category";
-                        src -> obs.effective = evaluate(src, now()) "r_${
-      snakeCase(item.linkId)
-                        }_effective";
+                        src -> obs.encounter = reference(encounter) "r_${snakeCase(
+                          item.linkId
+                        )}_encounter";
+                        src -> obs.category = cc("http://terminology.hl7.org/CodeSystem/observation-category", 'vital-signs', "Vital Signs") "r_${snakeCase(
+                          item.linkId
+                        )}_category";
+                        src -> obs.effective = evaluate(src, now()) "r_${snakeCase(
+                          item.linkId
+                        )}_effective";
+                        src -> obs.status = copy("finished") "r_${snakeCase(
+                          item.linkId
+                        )}_status";
                     } "r_${snakeCase(item.linkId)}";
     }
     `;
@@ -133,10 +177,23 @@ export const createMap = (
     item: Array<{ linkId: string; answer: Array<Record<string, any>> }>;
   }
 ) => {
-  const observations = questionnaireResponse.item
+  const singleAnswerObservations = questionnaireResponse.item
     .filter((elem) => elem.answer)
     .filter((elem) => elem.linkId !== "patient-id")
-    .map(createObservation);
+    .filter((elem) => elem.answer.length == 1)
+    .map(createObservationSingleAnswer);
+
+  const multiAnswerObservations = questionnaireResponse.item
+    .filter(
+      (elem) =>
+        elem.answer && elem.linkId !== "patient-id" && elem.answer.length > 1
+    )
+    .map(createObservationsMultiAnswer);
+
+  const observations = [
+    ...singleAnswerObservations,
+    ...multiAnswerObservations,
+  ];
 
   const observationGroups = observations.map((elem) => elem[0]);
 

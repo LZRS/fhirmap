@@ -1,12 +1,10 @@
 <script setup lang="ts">
-import HelloWorld from "./components/HelloWorld.vue";
 import MainContent from "@/components/MainContent.vue";
 
 </script>
 
 <template>
   <div>
-  <HelloWorld msg="You did it!" />
   <MainContent />
   </div>
 </template>
